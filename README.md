@@ -197,3 +197,49 @@ terraform plan
 - [Disaster Recovery Runbook](docs/disaster-recovery.md)
 - [Troubleshooting Guide](docs/troubleshooting.md)
 - [Local Setup Guide](docs/setup.md)
+
+---
+
+## 9. Visual Architecture & Proof of Work (Screenshots)
+
+The full 15-page visual artifact PDF is preserved in the repository at:  
+📄 **[`docs/screenshots/screenshots.pdf`](docs/screenshots/screenshots.pdf)**
+
+### 9.1 User Experience & Protocol Redirection
+| Live Web UI Application | Browser 302 Redirect (DevTools) |
+| :---: | :---: |
+| ![Web UI](docs/screenshots/01-web-ui-dashboard.png) | ![Browser 302 Redirect](docs/screenshots/02-browser-302-redirect-devtools.png) |
+
+### 9.2 Observability & Automated Testing
+| CloudWatch Operations Dashboard | Pytest 41 Unit Tests Passing |
+| :---: | :---: |
+| ![CloudWatch Dashboard](docs/screenshots/03-cloudwatch-operations-dashboard.png) | ![Test Suite](docs/screenshots/04-pytest-test-suite-41-passed.png) |
+
+### 9.3 Ingress Routing & Compute Fleet
+| API Gateway Throttling & Routes | Lambda Microservices Fleet (Python 3.13) |
+| :---: | :---: |
+| ![API Gateway](docs/screenshots/05-api-gateway-throttling-routes.png) | ![AWS Lambda](docs/screenshots/06-aws-lambda-fleet-functions.png) |
+
+### 9.4 Asynchronous Telemetry & S3 Data Lake
+| Lambda SQS Trigger (Batching) | Amazon SQS & Dead-Letter Queue |
+| :---: | :---: |
+| ![Lambda Trigger](docs/screenshots/07-lambda-sqs-event-source-mapping.png) | ![SQS Queues](docs/screenshots/08-sqs-click-events-dlq.png) |
+
+| Partitioned S3 Analytics Lake | Live Ingested JSONL Event |
+| :---: | :---: |
+| ![S3 Partitions](docs/screenshots/09-s3-analytics-partitioned-lake.png) | ![JSONL Content](docs/screenshots/10-s3-click-jsonl-event-content.png) |
+
+### 9.5 Database & Infrastructure as Code (Terraform)
+| DynamoDB Table Item with TTL | S3 Remote State Bucket (`dev/terraform.tfstate`) |
+| :---: | :---: |
+| ![DynamoDB TTL](docs/screenshots/11-dynamodb-item-detail-with-ttl.png) | ![Terraform State S3](docs/screenshots/12-s3-terraform-remote-state-bucket.png) |
+
+| DynamoDB State Lock Table (`LockID`) | S3 Static Frontend Hosting |
+| :---: | :---: |
+| ![DynamoDB Lock Table](docs/screenshots/13-dynamodb-state-lock-table.png) | ![S3 Frontend Bucket](docs/screenshots/14-s3-frontend-hosting-bucket.png) |
+
+### 9.6 Security & IAM Least Privilege
+| Dedicated IAM Execution Roles |
+| :---: |
+| ![IAM Roles](docs/screenshots/15-iam-least-privilege-lambda-roles.png) |
+
