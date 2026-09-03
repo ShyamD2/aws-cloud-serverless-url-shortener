@@ -1,0 +1,75 @@
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 0,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/ApiGateway", "Count", { "label": "API Total Requests", "stat": "Sum", "period": 60 } ],
+          [ ".", "4xx", { "label": "4XX Client Errors", "stat": "Sum", "period": 60, "color": "#ff7f0e" } ],
+          [ ".", "5xx", { "label": "5XX Server Errors", "stat": "Sum", "period": 60, "color": "#d62728" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "ap-south-1",
+        "title": "API Gateway Ingress & Error Rates"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 0,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "dev-click-events", { "label": "Click Queue Depth", "stat": "Maximum", "period": 60 } ],
+          [ ".", "ApproximateNumberOfMessagesVisible", "QueueName", "dev-click-events-dlq", { "label": "Poison Messages (DLQ)", "stat": "Maximum", "period": 60, "color": "#d62728" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "ap-south-1",
+        "title": "SQS Telemetry Backpressure & DLQ"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/Lambda", "Duration", "FunctionName", "dev-redirect", { "label": "Redirect Avg Latency (ms)", "stat": "Average", "period": 60 } ],
+          [ "...", { "label": "Redirect p95 Latency (ms)", "stat": "p95", "period": 60, "color": "#2ca02c" } ],
+          [ "...", { "label": "Redirect p99 Latency (ms)", "stat": "p99", "period": 60, "color": "#d62728" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "ap-south-1",
+        "title": "Redirect Lambda Execution Latency"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "dev-urls", { "label": "Consumed RCU", "stat": "Sum", "period": 60 } ],
+          [ ".", "ConsumedWriteCapacityUnits", ".", ".", { "label": "Consumed WCU", "stat": "Sum", "period": 60 } ],
+          [ ".", "ThrottledRequests", ".", ".", { "label": "Throttled Requests", "stat": "Sum", "period": 60, "color": "#d62728" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "ap-south-1",
+        "title": "DynamoDB Capacity Consumption & Throttles"
+      }
+    }
+  ]
+}

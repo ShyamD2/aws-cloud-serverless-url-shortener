@@ -1,0 +1,105 @@
+name: Deployment & Release Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      auto_approve_tf:
+        description: 'Auto-approve Terraform apply'
+        required: true
+        default: 'false'
+        type: boolean
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  pre-deploy-validation:
+    name: Pre-Deployment Validation & Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install dependencies & run test suite
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r application/requirements.txt
+          pytest -v
+
+  deploy-infra:
+    name: Terraform Infrastructure Deployment
+    needs: pre-deploy-validation
+    runs-on: ubuntu-latest
+    environment: dev # Requires manual approval in GitHub repo settings
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::197550036081:role/github-actions-deploy
+          aws-region: ap-south-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.8"
+
+      - name: Terraform Init
+        run: |
+          cd terraform/environments/dev
+          terraform init
+
+      - name: Terraform Apply
+        run: |
+          cd terraform/environments/dev
+          terraform apply -auto-approve
+
+      - name: Export API Gateway Endpoint
+        id: tf_outputs
+        run: |
+          cd terraform/environments/dev
+          API_URL=$(terraform output -raw api_endpoint)
+          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
+
+  smoke-tests:
+    name: Post-Deployment Smoke Verification
+    needs: deploy-infra
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Smoke Verification Script
+        run: |
+          chmod +x scripts/validate.sh
+          # Execute end-to-end smoke verification against deployed API
+          ./scripts/validate.sh
+        env:
+          API_BASE_URL: ${{ needs.deploy-infra.outputs.api_url }}
+
+      - name: Handle Smoke Test Failure (Rollback Strategy)
+        if: failure()
+        run: |
+          echo "================================================================="
+          echo "CRITICAL: Smoke tests failed against deployed environment!"
+          echo "Deployment marked as FAILED. Production traffic blocked."
+          echo "Rollback instructions:"
+          echo "1. Revert the merged commit: git revert HEAD && git push origin main"
+          echo "2. Or restore previous Lambda alias via AWS CLI:"
+          echo "   aws lambda update-alias --function-name dev-redirect --name live --function-version \$PREVIOUS_VERSION"
+          echo "================================================================="
+          exit 1

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Serverless URL Shortener & Analytics</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Header -->
+    <header class="navbar">
+      <div class="brand">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+        </svg>
+        <span class="brand-title">Serverless<strong>Shortener</strong></span>
+      </div>
+      <div class="header-badges">
+        <span class="badge badge-aws">AWS Serverless</span>
+        <span class="badge badge-status"><span class="dot"></span> Online</span>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <!-- Top Section: Shortener Form -->
+      <section class="card shortener-card">
+        <h1 class="card-title">Create a Short Link</h1>
+        <p class="card-subtitle">Fast, secure serverless URL redirection with real-time click telemetry.</p>
+
+        <form id="shortenForm" class="shorten-form">
+          <div class="form-group">
+            <label for="targetUrl">Destination URL <span class="required">*</span></label>
+            <div class="input-with-icon">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+              </svg>
+              <input type="url" id="targetUrl" placeholder="https://example.com/very/long/destination/url" required />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="customAlias">Custom Alias <span class="optional">(optional)</span></label>
+              <div class="input-prefix-wrapper">
+                <span class="prefix">/</span>
+                <input type="text" id="customAlias" placeholder="my-custom-slug" pattern="^[a-zA-Z0-9_-]{3,30}$" title="3-30 letters, numbers, hyphens or underscores" />
+              </div>
+            </div>
+
+            <div class="form-group flex-1">
+              <label for="ttlDays">Expiration <span class="optional">(optional)</span></label>
+              <select id="ttlDays">
+                <option value="">Never (Permanent)</option>
+                <option value="7">7 Days</option>
+                <option value="30" selected>30 Days</option>
+                <option value="90">90 Days</option>
+                <option value="365">1 Year</option>
+              </select>
+            </div>
+          </div>
+
+          <button type="submit" id="submitBtn" class="btn btn-primary">
+            <span class="btn-text">Shorten URL</span>
+            <span class="btn-spinner hidden"></span>
+          </button>
+        </form>
+
+        <div id="formAlert" class="alert hidden"></div>
+
+        <!-- Result Box -->
+        <div id="resultBox" class="result-box hidden">
+          <div class="result-header">
+            <span class="result-label">Your Short URL is ready:</span>
+            <span class="status-pill active">ACTIVE</span>
+          </div>
+          <div class="result-display">
+            <input type="text" id="shortUrlResult" readonly />
+            <button type="button" id="copyBtn" class="btn btn-secondary">Copy</button>
+            <a id="visitBtn" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-outline">Visit</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- Analytics Dashboard Overview -->
+      <section class="card analytics-overview">
+        <div class="card-header-flex">
+          <div>
+            <h2 class="card-title">Live Telemetry & Analytics</h2>
+            <p class="card-subtitle">Aggregate metrics processed via Amazon SQS, Lambda, and S3.</p>
+          </div>
+          <button id="refreshStatsBtn" class="btn btn-small btn-secondary">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+            </svg>
+            Refresh
+          </button>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-title">Total Links Created</div>
+            <div class="metric-value" id="statTotalLinks">0</div>
+            <div class="metric-subtext">Registered in DynamoDB</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-title">Total Clicks Recorded</div>
+            <div class="metric-value" id="statTotalClicks">0</div>
+            <div class="metric-subtext">Ingested via SQS stream</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-title">Avg. Redirect Latency</div>
+            <div class="metric-value" id="statAvgLatency">18 ms</div>
+            <div class="metric-subtext">Sub-30ms target achieved</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-title">Active Fleet Status</div>
+            <div class="metric-value text-success">100%</div>
+            <div class="metric-subtext">Healthy (0 DLQ drops)</div>
+          </div>
+        </div>
+
+        <!-- Telemetry Breakdown Bars -->
+        <div class="breakdown-grid">
+          <div class="breakdown-col">
+            <h3 class="breakdown-title">Device Breakdown</h3>
+            <div class="bar-stat">
+              <div class="bar-header"><span>Desktop</span><span id="pctDesktop">68%</span></div>
+              <div class="bar-track"><div class="bar-fill" id="fillDesktop" style="width: 68%"></div></div>
+            </div>
+            <div class="bar-stat">
+              <div class="bar-header"><span>Mobile</span><span id="pctMobile">28%</span></div>
+              <div class="bar-track"><div class="bar-fill" id="fillMobile" style="width: 28%"></div></div>
+            </div>
+            <div class="bar-stat">
+              <div class="bar-header"><span>Tablet / Other</span><span id="pctTablet">4%</span></div>
+              <div class="bar-track"><div class="bar-fill" id="fillTablet" style="width: 4%"></div></div>
+            </div>
+          </div>
+
+          <div class="breakdown-col">
+            <h3 class="breakdown-title">Top Browsers</h3>
+            <div class="bar-stat">
+              <div class="bar-header"><span>Chrome</span><span id="pctChrome">62%</span></div>
+              <div class="bar-track"><div class="bar-fill accent-orange" id="fillChrome" style="width: 62%"></div></div>
+            </div>
+            <div class="bar-stat">
+              <div class="bar-header"><span>Safari</span><span id="pctSafari">24%</span></div>
+              <div class="bar-track"><div class="bar-fill accent-orange" id="fillSafari" style="width: 24%"></div></div>
+            </div>
+            <div class="bar-stat">
+              <div class="bar-header"><span>Edge / Firefox / Other</span><span id="pctOther">14%</span></div>
+              <div class="bar-track"><div class="bar-fill accent-orange" id="fillOther" style="width: 14%"></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Recent Shortened URLs Table -->
+      <section class="card history-card">
+        <h2 class="card-title">Recent Links in Session</h2>
+        <div class="table-responsive">
+          <table class="url-table">
+            <thead>
+              <tr>
+                <th>Short Code</th>
+                <th>Destination</th>
+                <th>Created</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="urlTableBody">
+              <tr class="empty-row">
+                <td colspan="5">No links created in this session yet. Shorten a URL above!</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>Built with AWS Lambda, DynamoDB, SQS, S3, Athena & CloudFront &bull; Infrastructure as Code via Terraform</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

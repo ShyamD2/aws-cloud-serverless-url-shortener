@@ -1,0 +1,14 @@
+# ==============================================================================
+# Remote State Backend Configuration (S3 + DynamoDB Lock)
+# Rename this file to backend.tf after provisioning the bootstrap state_backend
+# ==============================================================================
+
+# terraform {
+#   backend "s3" {
+#     bucket         = "dev-url-shortener-tfstate-197550036081"
+#     key            = "dev/terraform.tfstate"
+#     region         = "ap-south-1"
+#     dynamodb_table = "dev-url-shortener-tfstate-locks"
+#     encrypt        = true
+#   }
+# }

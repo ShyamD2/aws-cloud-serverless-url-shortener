@@ -1,0 +1,4 @@
+# Example dev environment variables
+environment = "dev"
+aws_region  = "ap-south-1"
+base_url    = ""
