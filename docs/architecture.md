@@ -57,8 +57,8 @@ flowchart TD
     Admin -->|Calls REST API directly| APIGW
 
     %% Ingestion Routing
-    APIGW -->|POST /api/urls| L_Create
-    APIGW -->|GET /{short_code}| L_Redirect
+    APIGW -->|"POST /api/urls"| L_Create
+    APIGW -->|"GET /:short_code"| L_Redirect
 
     %% URL Creation Flow
     L_Create -->|Writes item with TTL| DDB

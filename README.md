@@ -66,9 +66,9 @@ flowchart TD
     Admin -->|Interacts with UI| CF
     CF -->|Calls API| APIGW
 
-    APIGW -->|POST /urls| L_Create
-    APIGW -->|GET /{short_code}| L_Redirect
-    APIGW -->|DELETE /urls/{short_code}| L_Delete
+    APIGW -->|"POST /urls"| L_Create
+    APIGW -->|"GET /:short_code"| L_Redirect
+    APIGW -->|"DELETE /urls/:short_code"| L_Delete
 
     %% Execution
     L_Create -->|PutItem with Condition| DDB
