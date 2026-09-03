@@ -84,7 +84,7 @@ resource "aws_lambda_permission" "apigw_create_url" {
   action        = "lambda:InvokeFunction"
   function_name = var.create_url_function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_apigatewayv2_api.http_api.arn}/*/*"
+  source_arn    = "${aws_apigatewayv2_api.http_api.execution_arn}/*/*"
 }
 
 # 2. Redirect Integration & Route
@@ -107,7 +107,7 @@ resource "aws_lambda_permission" "apigw_redirect" {
   action        = "lambda:InvokeFunction"
   function_name = var.redirect_function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_apigatewayv2_api.http_api.arn}/*/*"
+  source_arn    = "${aws_apigatewayv2_api.http_api.execution_arn}/*/*"
 }
 
 # 3. Delete URL Integration & Routes
@@ -136,5 +136,5 @@ resource "aws_lambda_permission" "apigw_delete_url" {
   action        = "lambda:InvokeFunction"
   function_name = var.delete_url_function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_apigatewayv2_api.http_api.arn}/*/*"
+  source_arn    = "${aws_apigatewayv2_api.http_api.execution_arn}/*/*"
 }

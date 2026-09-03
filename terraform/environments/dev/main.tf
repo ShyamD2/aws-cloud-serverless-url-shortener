@@ -71,14 +71,14 @@ module "api_gateway" {
   delete_url_function_arn  = module.lambda.delete_url_function_arn
 }
 
-# --- 8. CloudFront Edge CDN ---
-module "cloudfront" {
-  source                               = "../../modules/cloudfront"
-  environment                          = var.environment
-  frontend_bucket_id                   = module.s3.frontend_bucket_id
-  frontend_bucket_arn                  = module.s3.frontend_bucket_arn
-  frontend_bucket_regional_domain_name = module.s3.frontend_bucket_regional_domain_name
-}
+# --- 8. CloudFront Edge CDN (Skipped pending AWS account verification; using S3 frontend) ---
+# module "cloudfront" {
+#   source                               = "../../modules/cloudfront"
+#   environment                          = var.environment
+#   frontend_bucket_id                   = module.s3.frontend_bucket_id
+#   frontend_bucket_arn                  = module.s3.frontend_bucket_arn
+#   frontend_bucket_regional_domain_name = module.s3.frontend_bucket_regional_domain_name
+# }
 
 # --- 9. CloudWatch Monitoring & Dashboard ---
 module "cloudwatch" {
