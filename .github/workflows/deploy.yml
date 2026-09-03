@@ -1,8 +1,6 @@
 name: Deployment & Release Pipeline
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
     inputs:
       auto_approve_tf:
