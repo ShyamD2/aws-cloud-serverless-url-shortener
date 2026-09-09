@@ -16,13 +16,23 @@ const copyBtn = document.getElementById('copyBtn');
 const visitBtn = document.getElementById('visitBtn');
 const urlTableBody = document.getElementById('urlTableBody');
 const refreshStatsBtn = document.getElementById('refreshStatsBtn');
+const themeToggleBtn = document.getElementById('themeToggleBtn');
 
 // Local storage key for keeping track of session links
 const STORAGE_KEY = 'shortener_recent_links';
+const THEME_STORAGE_KEY = 'shortener_theme';
 
 document.addEventListener('DOMContentLoaded', () => {
   renderRecentLinks();
   updateStats();
+});
+
+// Theme Toggle Handler
+themeToggleBtn.addEventListener('click', () => {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem(THEME_STORAGE_KEY, next);
 });
 
 // Form Submit Handler
