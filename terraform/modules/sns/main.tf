@@ -29,13 +29,13 @@ resource "aws_sqs_queue_policy" "sns_to_sqs" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "AllowSNSPublishToSQS"
-        Effect    = "Allow"
+        Sid    = "AllowSNSPublishToSQS"
+        Effect = "Allow"
         Principal = {
           Service = "sns.amazonaws.com"
         }
-        Action    = "sqs:SendMessage"
-        Resource  = var.sqs_queue_arn
+        Action   = "sqs:SendMessage"
+        Resource = var.sqs_queue_arn
         Condition = {
           ArnEquals = {
             "aws:SourceArn" = aws_sns_topic.click_events.arn

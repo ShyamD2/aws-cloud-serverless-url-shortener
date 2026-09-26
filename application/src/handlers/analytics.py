@@ -47,7 +47,11 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         try:
             event_data = json.loads(body)
             # Unwrap SNS message envelope if raw_message_delivery wasn't enabled
-            if isinstance(event_data, dict) and "TopicArn" in event_data and "Message" in event_data:
+            if (
+                isinstance(event_data, dict)
+                and "TopicArn" in event_data
+                and "Message" in event_data
+            ):
                 try:
                     event_data = json.loads(event_data["Message"])
                 except (json.JSONDecodeError, TypeError):
@@ -100,7 +104,9 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                 "s3_bucket": bucket_name,
                 "s3_key": s3_key,
                 "bytes_persisted": len(ndjson_content),
-                "first_correlation_id": processed_events[0].get("correlation_id") if processed_events else None,
+                "first_correlation_id": processed_events[0].get("correlation_id")
+                if processed_events
+                else None,
             },
         )
     except Exception:

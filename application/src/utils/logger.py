@@ -40,11 +40,32 @@ class StructuredJsonFormatter(logging.Formatter):
 
         # Include custom extra metadata passed to logger
         reserved_attrs = {
-            "name", "msg", "args", "levelname", "levelno", "pathname",
-            "filename", "module", "exc_info", "exc_text", "stack_info",
-            "lineno", "funcName", "created", "msecs", "relativeCreated",
-            "thread", "threadName", "processName", "process", "message",
-            "service", "request_id", "correlation_id", "short_code", "status_code",
+            "name",
+            "msg",
+            "args",
+            "levelname",
+            "levelno",
+            "pathname",
+            "filename",
+            "module",
+            "exc_info",
+            "exc_text",
+            "stack_info",
+            "lineno",
+            "funcName",
+            "created",
+            "msecs",
+            "relativeCreated",
+            "thread",
+            "threadName",
+            "processName",
+            "process",
+            "message",
+            "service",
+            "request_id",
+            "correlation_id",
+            "short_code",
+            "status_code",
         }
         for key, val in record.__dict__.items():
             if key not in reserved_attrs and not key.startswith("_"):
@@ -98,7 +119,9 @@ def setup_logger(
     logger.setLevel(getattr(logging, level_name, logging.INFO))
 
     # Avoid duplicate handlers if already configured
-    if not any(isinstance(h.formatter, StructuredJsonFormatter) for h in logger.handlers):
+    if not any(
+        isinstance(h.formatter, StructuredJsonFormatter) for h in logger.handlers
+    ):
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(StructuredJsonFormatter(service_name=service_name))
         logger.handlers = [handler]
