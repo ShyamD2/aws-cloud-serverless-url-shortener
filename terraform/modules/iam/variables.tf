@@ -18,6 +18,12 @@ variable "analytics_bucket_arn" {
   type        = string
 }
 
+variable "sns_topic_arn" {
+  description = "ARN of the SNS click events topic"
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Resource tags"
   type        = map(string)

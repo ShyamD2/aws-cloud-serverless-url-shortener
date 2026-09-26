@@ -14,6 +14,7 @@ resource "aws_cloudwatch_metric_alarm" "api_5xx_errors" {
   threshold           = 0
   alarm_description   = "Triggered when API Gateway returns 5XX server errors"
   treat_missing_data  = "notBreaching"
+  alarm_actions       = var.sns_alarm_topic_arn != "" ? [var.sns_alarm_topic_arn] : []
 
   dimensions = {
     ApiId = var.api_id
@@ -34,6 +35,7 @@ resource "aws_cloudwatch_metric_alarm" "sqs_dlq_messages" {
   threshold           = 0
   alarm_description   = "CRITICAL: Poison messages detected in analytics Dead-Letter Queue"
   treat_missing_data  = "notBreaching"
+  alarm_actions       = var.sns_alarm_topic_arn != "" ? [var.sns_alarm_topic_arn] : []
 
   dimensions = {
     QueueName = "${var.queue_name}-dlq"
@@ -54,6 +56,7 @@ resource "aws_cloudwatch_metric_alarm" "dynamodb_throttles" {
   threshold           = 0
   alarm_description   = "Triggered if DynamoDB read/write requests are throttled"
   treat_missing_data  = "notBreaching"
+  alarm_actions       = var.sns_alarm_topic_arn != "" ? [var.sns_alarm_topic_arn] : []
 
   dimensions = {
     TableName = var.dynamodb_table_name

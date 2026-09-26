@@ -5,12 +5,14 @@
 
 -- 1. Create Analytics Database
 CREATE DATABASE IF NOT EXISTS url_shortener_analytics
-COMMENT 'Serverless click telemetry database for URL shortener';
+COMMENT 'Serverless click telemetry and diagnostics database for URL shortener';
 
 -- 2. Create Partitioned External Table
 -- Uses Partition Projection to avoid running manual MSCK REPAIR TABLE commands
 CREATE EXTERNAL TABLE IF NOT EXISTS url_shortener_analytics.clicks (
   event_id string,
+  request_id string,
+  correlation_id string,
   timestamp string,
   timestamp_epoch bigint,
   short_code string,
@@ -32,7 +34,9 @@ PARTITIONED BY (
 ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
 WITH SERDEPROPERTIES (
   'ignore.malformed.json' = 'true',
-  'mapping.event_id' = 'event_id'
+  'mapping.event_id' = 'event_id',
+  'mapping.request_id' = 'request_id',
+  'mapping.correlation_id' = 'correlation_id'
 )
 LOCATION 's3://${analytics_bucket_name}/clicks/'
 TBLPROPERTIES (
@@ -115,9 +119,55 @@ GROUP BY country
 ORDER BY click_count DESC
 LIMIT 10;
 
+-- ==============================================================================
+-- Diagnostics & Observability Queries
+-- ==============================================================================
+
 -- Query 8: End-to-End Latency Performance (p50, p95, p99 in milliseconds)
 SELECT
   approx_percentile(latency_ms, 0.50) AS p50_latency_ms,
   approx_percentile(latency_ms, 0.95) AS p95_latency_ms,
-  approx_percentile(latency_ms, 0.99) AS p99_latency_ms
+  approx_percentile(latency_ms, 0.99) AS p99_latency_ms,
+  round(avg(latency_ms), 2) AS avg_latency_ms,
+  round(max(latency_ms), 2) AS max_latency_ms
 FROM url_shortener_analytics.clicks;
+
+-- Query 9: Diagnostics - Request Context & Distributed Correlation Tracing
+-- Correlates an individual request trace across API Gateway, Lambda, and SNS/SQS
+SELECT
+  timestamp,
+  short_code,
+  request_id,
+  correlation_id,
+  http_status,
+  latency_ms,
+  browser,
+  country
+FROM url_shortener_analytics.clicks
+WHERE correlation_id = 'YOUR_CORRELATION_ID_HERE'
+ORDER BY timestamp DESC;
+
+-- Query 10: Diagnostics - HTTP Status Anomaly & Failure Rate Detection
+-- Audits non-302 redirect responses or elevated latency spikes
+SELECT
+  short_code,
+  http_status,
+  count(*) AS occurrence_count,
+  round(avg(latency_ms), 2) AS avg_latency_ms,
+  round(max(latency_ms), 2) AS max_latency_ms
+FROM url_shortener_analytics.clicks
+WHERE http_status != 302 OR latency_ms > 100.0
+GROUP BY short_code, http_status
+ORDER BY occurrence_count DESC;
+
+-- Query 11: Diagnostics - Event Deduplication & SQS Delivery Audit
+-- Detects potential at-least-once duplicate deliveries by unique event_id
+SELECT
+  event_id,
+  count(*) AS delivery_count,
+  min(timestamp) AS first_seen,
+  max(timestamp) AS last_seen
+FROM url_shortener_analytics.clicks
+GROUP BY event_id
+HAVING count(*) > 1
+ORDER BY delivery_count DESC;

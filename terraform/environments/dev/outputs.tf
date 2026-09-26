@@ -37,3 +37,13 @@ output "cloudwatch_dashboard" {
   description = "Name of the CloudWatch dashboard"
   value       = module.cloudwatch.dashboard_name
 }
+
+output "sns_click_events_topic_arn" {
+  description = "ARN of the SNS click events topic"
+  value       = module.sns.click_events_topic_arn
+}
+
+output "sns_alarms_topic_arn" {
+  description = "ARN of the SNS system alarms topic"
+  value       = module.sns.alarms_topic_arn
+}

@@ -94,6 +94,14 @@ resource "aws_iam_policy" "redirect" {
           "sqs:SendMessage"
         ]
         Resource = var.sqs_queue_arn
+      },
+      {
+        Sid    = "SNSPublishTelemetry"
+        Effect = "Allow"
+        Action = [
+          "sns:Publish"
+        ]
+        Resource = var.sns_topic_arn != "" ? var.sns_topic_arn : "*"
       }
     ]
   })

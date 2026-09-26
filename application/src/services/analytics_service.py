@@ -96,16 +96,22 @@ def sanitize_referrer(referrer: str | None) -> str:
 
 
 class AnalyticsService:
-    """Publishes click events to SQS asynchronously."""
+    """Publishes click events to Amazon SNS messaging fabric or Amazon SQS asynchronously."""
 
     def __init__(
         self,
         queue_url: str | None = None,
+        topic_arn: str | None = None,
         sqs_client: Any = None,
+        sns_client: Any = None,
     ):
         self.queue_url = queue_url or os.environ.get("CLICK_EVENTS_QUEUE_URL")
+        self.topic_arn = topic_arn or os.environ.get("CLICK_EVENTS_TOPIC_ARN")
         self._sqs = sqs_client or boto3.client(
             "sqs", region_name=os.environ.get("AWS_REGION", "ap-south-1")
+        )
+        self._sns = sns_client or boto3.client(
+            "sns", region_name=os.environ.get("AWS_REGION", "ap-south-1")
         )
 
     def build_click_event(
@@ -115,8 +121,10 @@ class AnalyticsService:
         headers: dict[str, Any] | None = None,
         status_code: int = 302,
         latency_ms: float = 0.0,
+        request_id: str | None = None,
+        correlation_id: str | None = None,
     ) -> dict[str, Any]:
-        """Constructs a normalized, privacy-preserving click telemetry event."""
+        """Constructs a normalized, privacy-preserving click telemetry event with trace context."""
         headers = headers or {}
         # Case-insensitive header lookup
         normalized_headers = {k.lower(): v for k, v in headers.items()}
@@ -136,8 +144,13 @@ class AnalyticsService:
         )
 
         now = datetime.now(timezone.utc)
+        resolved_req_id = request_id or str(uuid.uuid4())
+        resolved_corr_id = correlation_id or resolved_req_id
+
         return {
             "event_id": str(uuid.uuid4()),
+            "request_id": resolved_req_id,
+            "correlation_id": resolved_corr_id,
             "timestamp": now.isoformat(),
             "timestamp_epoch": int(now.timestamp()),
             "short_code": short_code,
@@ -152,21 +165,51 @@ class AnalyticsService:
         }
 
     def publish_click_event(self, event: dict[str, Any]) -> bool:
-        """Publishes event to Amazon SQS. Fails gracefully without raising."""
-        if not self.queue_url:
-            logger.warning(
-                "CLICK_EVENTS_QUEUE_URL not configured. Skipping SQS publish."
-            )
-            return False
+        """
+        Publishes event to Amazon SNS topic (which fans out to SQS) or directly to SQS queue.
+        Fails gracefully without raising to prevent impacting end-user redirects.
+        """
+        payload = json.dumps(event)
 
-        try:
-            self._sqs.send_message(
-                QueueUrl=self.queue_url,
-                MessageBody=json.dumps(event),
-            )
-            return True
-        except Exception:
-            logger.exception(
-                "Failed to publish click event to SQS queue %s", self.queue_url
-            )
-            return False
+        # 1. Publish to Amazon SNS Topic (Pub/Sub Event-Driven Fabric)
+        if self.topic_arn:
+            try:
+                self._sns.publish(
+                    TopicArn=self.topic_arn,
+                    Message=payload,
+                    MessageAttributes={
+                        "EventType": {
+                            "DataType": "String",
+                            "StringValue": "ClickEvent",
+                        },
+                        "CorrelationId": {
+                            "DataType": "String",
+                            "StringValue": str(event.get("correlation_id", "unknown")),
+                        },
+                    },
+                )
+                return True
+            except Exception:
+                logger.exception(
+                    "Failed to publish click event to SNS topic %s. Falling back to SQS.",
+                    self.topic_arn,
+                )
+
+        # 2. Fallback or direct publish to Amazon SQS Queue
+        if self.queue_url:
+            try:
+                self._sqs.send_message(
+                    QueueUrl=self.queue_url,
+                    MessageBody=payload,
+                )
+                return True
+            except Exception:
+                logger.exception(
+                    "Failed to publish click event to SQS queue %s", self.queue_url
+                )
+                return False
+
+        logger.warning(
+            "Neither CLICK_EVENTS_TOPIC_ARN nor CLICK_EVENTS_QUEUE_URL configured. Skipping publish."
+        )
+        return False

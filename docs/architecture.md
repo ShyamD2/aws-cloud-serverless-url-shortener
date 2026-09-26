@@ -29,7 +29,7 @@ flowchart TD
     end
 
     subgraph IngestionLayer["API & Ingestion Layer"]
-        APIGW["Amazon API Gateway (HTTP API v2)<br/>Payload Compression & Throttling"]
+        APIGW["Amazon API Gateway (HTTP API v2)<br/>Payload Compression, Throttling & Access Logs"]
         CF -->|Routes /api/* & /{short_code}| APIGW
     end
 
@@ -39,16 +39,23 @@ flowchart TD
         L_Analytics["Analytics Processor Lambda<br/>(Python 3.13)"]
     end
 
-    subgraph StorageLayer["Data Storage & Async Queuing"]
-        DDB[("Amazon DynamoDB<br/>(Single-Table, On-Demand, TTL)")]
+    subgraph MessagingLayer["Asynchronous Messaging Fabric"]
+        SNS["Amazon SNS Topic<br/>(Click Telemetry Fanout Fabric)"]
         SQS["Amazon SQS Standard Queue<br/>(Decoupled Click Stream)"]
         SQS_DLQ["Amazon SQS Dead-Letter Queue<br/>(Poison Messages)"]
-        S3_Data[("Amazon S3 Analytics Bucket<br/>(Partitioned Parquet / JSONL)")]
+        SNS -->|Raw Message Delivery| SQS
+    end
+
+    subgraph StorageLayer["Data Storage & Analytics Lake"]
+        DDB[("Amazon DynamoDB<br/>(Single-Table, On-Demand, TTL)")]
+        S3_Data[("Amazon S3 Analytics Bucket<br/>(Partitioned JSONL Lake)")]
     end
 
     subgraph AnalyticsLayer["Query & Observability Layer"]
-        Athena["Amazon Athena<br/>(Serverless SQL Analytics)"]
-        CW["Amazon CloudWatch<br/>(Metrics, Alarms, Structured Logs)"]
+        Athena["Amazon Athena<br/>(Serverless SQL Analytics & Trace Diagnostics)"]
+        CW["Amazon CloudWatch<br/>(Metrics, Alarms, Structured JSON Logs)"]
+        SNS_Alarms["Amazon SNS Topic<br/>(System & DLQ Alerts)"]
+        CW -.->|Alarm Action Trigger| SNS_Alarms
     end
 
     %% Client Interactions
@@ -67,17 +74,17 @@ flowchart TD
     %% Redirect Flow (Decoupled)
     L_Redirect -->|GetItem: Fetch URL| DDB
     L_Redirect -->|Sends 301/302 Location Header| U
-    L_Redirect -->|Fire-and-forget: Push click event| SQS
-    L_Redirect -.->|Logs & Metrics| CW
+    L_Redirect -.->|Async Non-Blocking Publish| SNS
+    L_Redirect -.->|Structured Logs & Context| CW
 
     %% Async Analytics Flow
     SQS -->|Batch triggers| L_Analytics
     SQS -.->|After 3 failed retries| SQS_DLQ
     L_Analytics -->|Buffers & writes batch| S3_Data
-    L_Analytics -.->|Logs & Metrics| CW
+    L_Analytics -.->|Structured Ingestion Logs| CW
 
     %% Querying
-    Athena -->|Queries partitioned data| S3_Data
+    Athena -->|Queries partitioned data & traces| S3_Data
 ```
 
 ---
@@ -86,33 +93,37 @@ flowchart TD
 
 ### 3.1 URL Creation Flow (`POST /api/urls`)
 1. **Client Request**: The client sends a `POST` request with a JSON payload: `{"url": "https://example.com/target", "custom_alias": "custom", "ttl_days": 30}`.
-2. **Validation**: The `Create URL Lambda` performs syntactic and security validations:
+2. **Context Extraction**: The handler extracts `request_id` and `correlation_id` from event headers and Lambda execution context.
+3. **Validation**: The `Create URL Lambda` performs syntactic and security validations:
    - Must start with `http://` or `https://`.
    - Domain must not match the shortener domain (loop prevention).
    - URL length $\le$ 2048 characters.
    - Optional `custom_alias` must follow `^[a-zA-Z0-9_-]{3,30}$`.
-3. **Short Code Generation**: If no custom alias is specified, a cryptographically secure 7-character Base62 identifier is generated.
-4. **Conditional Put**: A DynamoDB `PutItem` operation is executed with a condition expression `attribute_not_exists(short_code)` to guarantee uniqueness and prevent race conditions.
-5. **Response**: HTTP 201 Created returning `short_code`, `short_url`, `created_at`, and `expires_at`.
+4. **Short Code Generation**: If no custom alias is specified, a cryptographically secure 7-character Base62 identifier is generated.
+5. **Conditional Put**: A DynamoDB `PutItem` operation is executed with a condition expression `attribute_not_exists(short_code)` to guarantee uniqueness and prevent race conditions.
+6. **Structured Logging**: Emits a structured JSON log entry containing `short_code`, `request_id`, and `correlation_id`.
+7. **Response**: HTTP 201 Created returning `short_code`, `short_url`, `created_at`, and `expires_at`.
 
 ### 3.2 High-Performance Redirect Flow (`GET /{short_code}`)
 1. **Client Request**: User clicks `https://domain/{short_code}`.
-2. **Direct Lookup**: API Gateway routes to `Redirect Lambda`. The function executes a single, highly indexed DynamoDB `GetItem` query.
-3. **Status & Expiration Evaluation**:
+2. **Trace Context Propagation**: API Gateway injects `$context.requestId`. Lambda extracts or generates distributed `correlation_id`.
+3. **Direct Lookup**: API Gateway routes to `Redirect Lambda`. The function executes a single, highly indexed DynamoDB `GetItem` query.
+4. **Status & Expiration Evaluation**:
    - If item not found: returns HTTP 404 Not Found.
    - If item is marked `status = DISABLED`: returns HTTP 410 Gone.
    - If `expires_at` is set and `expires_at < current_timestamp`: returns HTTP 410 Gone.
-4. **Immediate Redirect**: The Lambda immediately responds with HTTP 302 (or 301) and a `Location: <original_url>` header. The client is immediately forwarded without waiting for analytics.
-5. **Asynchronous Telemetry Dispatch**: Simultaneously or via non-blocking execution, the click event (metadata: IP hash/country, user-agent parsed device/browser/OS, referrer, timestamp) is published to the `Amazon SQS` queue.
+5. **Immediate Redirect**: The Lambda immediately responds with HTTP 302 and a `Location: <original_url>` header. The client is forwarded without blocking on analytics.
+6. **Asynchronous Telemetry Dispatch via SNS**: The click event is published non-blockingly to the `Amazon SNS` topic (`dev-click-events-topic`) with event attributes (`CorrelationId`, `EventType`). Amazon SNS immediately fans out to the `Amazon SQS` buffer (`dev-click-events`).
 
 ### 3.3 Asynchronous Analytics Pipeline
-1. **Queueing**: SQS buffers incoming click events. If traffic spikes occur (e.g., viral link), the SQS queue absorbs the burst without throttling DynamoDB or degrading redirect response times.
+1. **Fanout & Buffering**: SNS delivers click records to SQS using raw message delivery. If traffic spikes occur, SQS absorbs the burst without throttling DynamoDB.
 2. **Batch Processing**: The `Analytics Processor Lambda` is triggered by SQS in batches (e.g., batch size: 10 items, batching window: 5 seconds).
-3. **Partitioned Ingestion**: The processor aggregates events and flushes them to the Analytics S3 bucket using a temporal hive-style partition layout:
+3. **Context-Aware Ingestion**: The processor logs the ingested records with propagated `correlation_id` and `request_id` to CloudWatch.
+4. **Partitioned Ingestion**: The processor flushes batches to the Analytics S3 bucket using temporal hive-style partitioning:
    ```
    s3://<analytics-bucket>/clicks/year=YYYY/month=MM/day=DD/hour=HH/<batch-id>.jsonl
    ```
-4. **Poison-Pill Handling**: If the processor fails to parse or write a batch after 3 retries, SQS routes the message to the Dead-Letter Queue (`SQS_DLQ`) to prevent queue stalling.
+5. **Poison-Pill Handling**: If processing fails after 3 retries, SQS routes the message to the Dead-Letter Queue (`SQS_DLQ`), which triggers an Amazon CloudWatch DLQ alarm routed to the `dev-system-alarms-topic` SNS topic.
 
 ---
 
@@ -123,10 +134,11 @@ flowchart TD
 | **Amazon API Gateway (HTTP API v2)** | Low latency, built-in CORS, native Lambda integration, 70% cheaper than REST APIs (\$1.00 vs \$3.50 per million requests). | **Application Load Balancer (ALB)**: Rejected due to \$16–22/month fixed baseline cost for idle instances. |
 | **AWS Lambda (Python 3.13)** | True zero-idle cost, sub-second auto-scaling from 0 to thousands of concurrent requests, low operational burden. | **AWS Fargate / ECS**: Rejected due to minimum hourly task compute charges and container management overhead. |
 | **Amazon DynamoDB (On-Demand)** | Single-digit millisecond reads at any scale, native automatic TTL expiration, zero baseline cost in On-Demand mode. | **Amazon Aurora Serverless**: Rejected due to high minimum ACU baseline cost (\$30–45+/month) and connection pool management complexity. |
+| **Amazon SNS** | Decoupled pub/sub messaging fabric for telemetry fanout and real-time CloudWatch alarm dispatch. | **EventBridge**: Excluded to avoid additional bus overhead for simple fanout. |
 | **Amazon SQS (Standard)** | Decouples read/redirect path from analytics writes; eliminates latency penalties on user redirects; provides backpressure buffer. | **Amazon Kinesis Data Streams**: Rejected due to persistent per-shard hourly costs (\$0.015/shard/hr $\approx$ \$11/month). |
 | **Amazon S3** | Durable, virtually limitless, ultra-cheap storage for partitioned analytics events (\$0.023/GB/month). | **DynamoDB Click Table**: Rejected because high-volume analytical records rapidly inflate DynamoDB storage and scan costs. |
 | **Amazon Athena** | Serverless interactive SQL analytics directly over raw S3 data without maintaining an always-on database (\$5.00 per TB scanned; < \$0.01 for small datasets). | **Amazon Redshift Serverless / OpenSearch**: Rejected due to steep hourly costs (\$100s/month) for an analytical workload that is queried occasionally. |
-| **Amazon CloudWatch** | Unified logging, custom metrics, and alarm triggers native to all AWS services without third-party agents. | **Datadog / New Relic**: Rejected due to licensing costs and unnecessary complexity for a serverless AWS-focused project. |
+| **Amazon CloudWatch** | Unified structured JSON logging, custom metrics, and alarm triggers native to all AWS services without third-party agents. | **Datadog / New Relic**: Rejected due to licensing costs and unnecessary complexity for a serverless AWS-focused project. |
 | **Amazon CloudFront** | Low-latency CDN edge delivery for frontend single-page application assets with HTTPS by default. | **S3 Website Hosting (Direct HTTP)**: Direct S3 website endpoints do not support modern TLS/HTTPS without CloudFront. |
 
 ---

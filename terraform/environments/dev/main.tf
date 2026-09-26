@@ -25,6 +25,14 @@ module "sqs" {
   visibility_timeout_seconds = 30
 }
 
+# --- 3b. SNS Asynchronous Messaging Fabric & Alarms Topic ---
+module "sns" {
+  source        = "../../modules/sns"
+  environment   = var.environment
+  sqs_queue_arn = module.sqs.queue_arn
+  sqs_queue_url = module.sqs.queue_url
+}
+
 # --- 4. S3 Storage Buckets ---
 module "s3" {
   source                = "../../modules/s3"
@@ -40,6 +48,7 @@ module "iam" {
   dynamodb_table_arn   = module.dynamodb.table_arn
   sqs_queue_arn        = module.sqs.queue_arn
   analytics_bucket_arn = module.s3.analytics_bucket_arn
+  sns_topic_arn        = module.sns.click_events_topic_arn
 }
 
 # --- 6. AWS Lambda Functions ---
@@ -50,6 +59,7 @@ module "lambda" {
   urls_table_name       = module.dynamodb.table_name
   sqs_queue_url         = module.sqs.queue_url
   sqs_queue_arn         = module.sqs.queue_arn
+  sns_topic_arn         = module.sns.click_events_topic_arn
   analytics_bucket_name = module.s3.analytics_bucket_id
   base_url              = var.base_url
 
@@ -89,4 +99,5 @@ module "cloudwatch" {
   queue_name             = "${var.environment}-click-events"
   dynamodb_table_name    = module.dynamodb.table_name
   redirect_function_name = module.lambda.redirect_function_name
+  sns_alarm_topic_arn    = module.sns.alarms_topic_arn
 }

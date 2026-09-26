@@ -1,15 +1,14 @@
 """Lambda handler for creating shortened URLs."""
 
 import json
-import logging
 from typing import Any
 
 from ..services.url_service import AliasAlreadyExistsError, UrlService
+from ..utils.logger import extract_request_context, setup_logger
 from ..utils.response import api_response, error_response
 from ..utils.validation import validate_create_payload
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger = setup_logger("create-url-service", service_name="create-url-service")
 
 url_service = UrlService()
 
@@ -19,9 +18,14 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     Handles POST /urls and POST /api/urls requests.
     Validates input, generates short code or saves alias, and writes to DynamoDB.
     """
+    request_id, correlation_id = extract_request_context(event, context)
     logger.info(
-        "Received create URL event",
-        extra={"requestId": getattr(context, "aws_request_id", None)},
+        "Received create URL request",
+        extra={
+            "request_id": request_id,
+            "correlation_id": correlation_id,
+            "http_method": "POST",
+        },
     )
 
     # Determine caller host from event headers to generate accurate absolute short_url
@@ -70,12 +74,38 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         if result.get("expires_at_iso"):
             response_body["expires_at"] = result["expires_at_iso"]
 
+        logger.info(
+            "Successfully created shortened URL",
+            extra={
+                "short_code": result["short_code"],
+                "request_id": request_id,
+                "correlation_id": correlation_id,
+                "status_code": 201,
+            },
+        )
+
         return api_response(201, body=response_body)
 
     except AliasAlreadyExistsError as e:
+        logger.warning(
+            "Custom alias collision",
+            extra={
+                "alias": sanitized.get("custom_alias"),
+                "request_id": request_id,
+                "correlation_id": correlation_id,
+                "status_code": 409,
+            },
+        )
         return error_response(409, str(e), error_code="ALIAS_CONFLICT")
     except Exception:
-        logger.exception("Unexpected error creating short URL")
+        logger.exception(
+            "Unexpected error creating short URL",
+            extra={
+                "request_id": request_id,
+                "correlation_id": correlation_id,
+                "status_code": 500,
+            },
+        )
         return error_response(
             500, "Internal server error occurred", error_code="INTERNAL_ERROR"
         )

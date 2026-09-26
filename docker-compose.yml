@@ -6,9 +6,19 @@ services:
       - "4566:4566"            # LocalStack Edge Gateway
       - "4510-4559:4510-4559"  # External services port range
     environment:
-      - SERVICES=dynamodb,sqs,s3,lambda,apigateway
+      - SERVICES=dynamodb,sqs,sns,s3,lambda,apigateway
       - AWS_DEFAULT_REGION=ap-south-1
       - DOCKER_HOST=unix:///var/run/docker.sock
     volumes:
       - "${LOCALSTACK_VOLUME_DIR:-./.localstack}:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
+
+  test-runner:
+    container_name: url_shortener_test_runner
+    build:
+      context: .
+      target: test
+    environment:
+      - AWS_DEFAULT_REGION=ap-south-1
+    depends_on:
+      - localstack

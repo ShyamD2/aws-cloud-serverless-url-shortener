@@ -29,6 +29,12 @@ variable "redirect_function_name" {
   type        = string
 }
 
+variable "sns_alarm_topic_arn" {
+  description = "ARN of the SNS topic for CloudWatch alarm notifications"
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Resource tags"
   type        = map(string)

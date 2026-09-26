@@ -81,7 +81,40 @@ All queries are defined in [`application/src/services/athena_queries.sql`](../ap
 
 ---
 
-## 4. Query Cost Optimization Best Practices
+## 4. Operational Diagnostics & Trace Queries
+
+The telemetry schema includes `request_id` and `correlation_id` propagated across the API Gateway, Lambda, and SNS/SQS boundaries, enabling Athena to act as an operational diagnostic tool:
+
+8. **Distributed Correlation Trace Lookup**:
+   Locate the entire execution and click trajectory for a specific transaction or user session:
+   ```sql
+   SELECT timestamp, short_code, request_id, correlation_id, http_status, latency_ms, browser
+   FROM url_shortener_analytics.clicks
+   WHERE correlation_id = 'YOUR_CORRELATION_ID_HERE'
+   ORDER BY timestamp DESC;
+   ```
+
+9. **HTTP Anomaly & Error Detection**:
+   Isolate abnormal status codes or redirect latencies exceeding 100ms:
+   ```sql
+   SELECT short_code, http_status, count(*) AS failure_count, round(avg(latency_ms), 2) AS avg_latency_ms
+   FROM url_shortener_analytics.clicks
+   WHERE http_status != 302 OR latency_ms > 100.0
+   GROUP BY short_code, http_status
+   ORDER BY failure_count DESC;
+   ```
+
+10. **At-Least-Once SQS Delivery & Deduplication Audit**:
+    Audit duplicate message deliveries via SQS retry by unique `event_id`:
+    ```sql
+    SELECT event_id, count(*) AS delivery_count, min(timestamp) AS first_seen, max(timestamp) AS last_seen
+    FROM url_shortener_analytics.clicks
+    GROUP BY event_id HAVING count(*) > 1;
+    ```
+
+---
+
+## 5. Query Cost Optimization Best Practices
 1. **Always filter by date partition** when querying specific time ranges:
    ```sql
    WHERE year = '2026' AND month = '09' AND day >= '01'

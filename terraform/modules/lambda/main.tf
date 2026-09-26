@@ -48,6 +48,7 @@ resource "aws_lambda_function" "redirect" {
     variables = {
       URLS_TABLE_NAME        = var.urls_table_name
       CLICK_EVENTS_QUEUE_URL = var.sqs_queue_url
+      CLICK_EVENTS_TOPIC_ARN = var.sns_topic_arn
     }
   }
 

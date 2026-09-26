@@ -1,11 +1,13 @@
 # Production-Grade Serverless URL Shortener & Analytics Platform
+### AWS Event-Driven Telemetry & Asynchronous Messaging Fabric
 
 [![CI/CD Pipeline](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-blue.svg)](.github/workflows/ci.yml)
 [![Terraform](https://img.shields.io/badge/IaC-Terraform%201.15+-purple.svg)](https://www.terraform.io/)
 [![Python](https://img.shields.io/badge/Python-3.13-yellow.svg)](https://www.python.org/)
+[![Docker](https://img.shields.io/badge/Docker-Multi--Stage-2496ED.svg)](Dockerfile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-A clean, realistic, production-style URL shortener and real-time click analytics platform built on AWS serverless architecture. Designed with strict cost discipline (**under \$2.00/month** at normal demo traffic) and defense-in-depth least privilege security.
+A clean, realistic, production-style URL shortener and real-time click analytics platform built on AWS serverless event-driven architecture. Designed with strict cost discipline (**under \$2.00/month** at normal demo traffic) and defense-in-depth least privilege security.
 
 ---
 
@@ -18,8 +20,9 @@ Traditional URL shorteners deployed on container clusters (ECS/EKS) or persisten
 A purely event-driven, pay-per-use serverless platform:
 1. **Zero Idle Compute Cost**: HTTP API v2 + AWS Lambda + DynamoDB On-Demand means zero cost when traffic is idle.
 2. **Sub-30ms Redirects**: User redirects query a single-table DynamoDB lookup and immediately return HTTP 302.
-3. **Decoupled Telemetry Pipeline**: Click metadata is published non-blockingly to Amazon SQS, buffered, and batch-written to Amazon S3 in partitioned JSONL format.
-4. **Serverless SQL Queries**: In-place analytics queries powered by Amazon Athena without maintaining an always-on data warehouse.
+3. **Decoupled Telemetry Pipeline**: Click metadata is published non-blockingly to Amazon SNS/SQS, buffered, and batch-written to Amazon S3 in partitioned JSONL format.
+4. **Structured JSON Observability**: Request-context propagation (`request_id`, `correlation_id`) across CloudWatch logs and analytical telemetry.
+5. **Serverless SQL Queries & Diagnostics**: In-place analytics and operational diagnostics powered by Amazon Athena without maintaining an always-on data warehouse.
 
 ---
 
@@ -39,7 +42,7 @@ flowchart TD
     end
 
     subgraph IngestionLayer["API Layer"]
-        APIGW["Amazon API Gateway (HTTP API v2)<br/>Payload Compression & Throttling"]
+        APIGW["Amazon API Gateway (HTTP API v2)<br/>Payload Compression, Throttling & Access Logs"]
     end
 
     subgraph ComputeLayer["Compute Layer (AWS Lambda - Python 3.13)"]
@@ -49,16 +52,23 @@ flowchart TD
         L_Analytics["Analytics Processor Lambda"]
     end
 
-    subgraph StorageLayer["Data Storage & Async Queuing"]
-        DDB[("Amazon DynamoDB<br/>(Single-Table, On-Demand, TTL)")]
+    subgraph MessagingLayer["Asynchronous Messaging Fabric"]
+        SNS["Amazon SNS Topic<br/>(Click Telemetry Fanout Fabric)"]
         SQS["Amazon SQS Standard Queue<br/>(Click Event Buffer)"]
         SQS_DLQ["Amazon SQS Dead-Letter Queue<br/>(Poison Messages)"]
-        S3_Data[("Amazon S3 Analytics Bucket<br/>(Partitioned JSONL)")]
+        SNS -->|Raw Message Delivery| SQS
     end
 
-    subgraph AnalyticsLayer["Query & Observability Layer"]
-        Athena["Amazon Athena<br/>(Serverless SQL Analytics)"]
-        CW["Amazon CloudWatch<br/>(Metrics, Alarms, Logs)"]
+    subgraph StorageLayer["Data Storage & Analytics Lake"]
+        DDB[("Amazon DynamoDB<br/>(Single-Table, On-Demand, TTL)")]
+        S3_Data[("Amazon S3 Analytics Bucket<br/>(Partitioned JSONL Lake)")]
+    end
+
+    subgraph ObservabilityLayer["Observability & Diagnostics Layer"]
+        Athena["Amazon Athena<br/>(SQL Analytics & Trace Diagnostics)"]
+        CW["Amazon CloudWatch<br/>(Structured Logs, Metrics, Alarms)"]
+        SNS_Alarms["Amazon SNS Topic<br/>(System & DLQ Alerts)"]
+        CW -.->|Alarm Action Trigger| SNS_Alarms
     end
 
     %% Routing
@@ -75,13 +85,13 @@ flowchart TD
     L_Delete -->|Soft Delete / Disable| DDB
     L_Redirect -->|GetItem: Resolve URL| DDB
     L_Redirect -->|Return 302 Found| U
-    L_Redirect -.->|Async Fire-and-Forget| SQS
+    L_Redirect -.->|Async Non-Blocking Publish| SNS
 
     %% Analytics Pipeline
     SQS -->|Batch triggers| L_Analytics
     SQS -.->|After 3 retries| SQS_DLQ
     L_Analytics -->|Writes partitioned JSONL| S3_Data
-    Athena -->|Interactive SQL Queries| S3_Data
+    Athena -->|Interactive SQL & Trace Diagnostics| S3_Data
 
     L_Create -.-> CW
     L_Redirect -.-> CW
@@ -97,11 +107,13 @@ flowchart TD
 | **API Gateway (HTTP API v2)** | Low latency, built-in CORS, 71% cheaper than REST APIs (\$1.00/1M vs \$3.50/1M). | **ALB**: Excluded due to \$16–\$22/mo fixed cost. |
 | **AWS Lambda (Python 3.13)** | True pay-per-use, sub-second auto-scaling, zero maintenance. | **ECS/Fargate**: Excluded due to minimum hourly task compute charges. |
 | **Amazon DynamoDB (On-Demand)** | 3–6ms reads, native automated TTL expiration, zero idle cost. | **Aurora Serverless**: Excluded due to \$30–\$45+/mo minimum ACU charge. |
-| **Amazon SQS (Standard)** | Decouples redirect latency from telemetry writes; buffers traffic spikes. | **Kinesis**: Excluded due to persistent \$11/mo per-shard baseline charge. |
-| **Amazon S3** | Durable, partitioned analytical data lake (\$0.023/GB/mo). | **Click Table in DynamoDB**: Excluded to avoid high scan costs on event history. |
-| **Amazon Athena** | Serverless interactive SQL analytics directly over S3 JSONL (\$5.00/TB scanned). | **Redshift / OpenSearch**: Excluded due to prohibitive fixed monthly costs. |
+| **Amazon SNS** | Pub/Sub messaging fabric for telemetry fanout and real-time CloudWatch alarm dispatch. | **EventBridge**: Excluded to avoid additional bus overhead for simple fanout. |
+| **Amazon SQS (Standard)** | Decouples redirect latency from telemetry writes; buffers traffic spikes; DLQ for poison pills. | **Kinesis**: Excluded due to persistent \$11/mo per-shard baseline charge. |
+| **Amazon S3** | Durable, partitioned analytical data lake (\$0.023/GB/mo) and remote state backend. | **Click Table in DynamoDB**: Excluded to avoid high scan costs on event history. |
+| **Amazon Athena** | Serverless interactive SQL analytics and trace diagnostics directly over S3 JSONL (\$5.00/TB scanned). | **Redshift / OpenSearch**: Excluded due to prohibitive fixed monthly costs. |
 | **Amazon CloudFront** | Low-latency CDN edge delivery for static web UI with free HTTPS. | **Custom Domain & ACM**: Excluded by default to avoid domain registration costs. |
-| **Amazon CloudWatch** | Unified logging, alarms, and dashboards native to AWS services. | **Datadog**: Excluded to avoid external SaaS subscriptions. |
+| **Amazon CloudWatch** | Unified structured JSON logging, request-context propagation, metric alarms, and dashboards. | **Datadog**: Excluded to avoid external SaaS subscriptions. |
+| **Docker** | Multi-stage testing image and LocalStack container orchestration for seamless local emulation. | **Docker in Production**: Compute runs serverless on Lambda; Docker is dedicated to Dev/CI. |
 
 ---
 
@@ -112,13 +124,15 @@ flowchart TD
 ├── application/             # Python Lambda services, handlers, and unit tests
 │   ├── src/
 │   │   ├── handlers/        # create_url.py, redirect.py, delete_url.py, analytics.py
-│   │   ├── services/        # url_service.py, analytics_service.py, validation_service.py
-│   │   └── utils/           # short_code.py, validation.py, response.py
-│   ├── tests/               # 41 comprehensive pytest unit tests (using moto)
+│   │   ├── services/        # url_service.py, analytics_service.py, athena_queries.sql
+│   │   └── utils/           # logger.py, short_code.py, validation.py, response.py
+│   ├── tests/               # 49 comprehensive pytest unit tests (using moto)
 │   └── requirements.txt     # Python dependencies
+├── Dockerfile               # Multi-stage Dockerfile (base, test, lambda targets)
+├── docker-compose.yml       # LocalStack (DDB, SQS, SNS, S3, Lambda) + test runner
 ├── frontend/                # Static SPA client (index.html, app.js, style.css)
 ├── terraform/               # Modular Infrastructure as Code
-│   ├── modules/             # 9 modular AWS components (API GW, Lambda, DDB, S3, etc.)
+│   ├── modules/             # 10 modular AWS components (API GW, Lambda, SNS, SQS, DDB, S3, etc.)
 │   └── environments/dev/    # Dev environment root composition
 ├── .github/workflows/       # CI, Security, Terraform Plan, and Deploy pipelines
 ├── monitoring/              # CloudWatch dashboard and alarm definitions
