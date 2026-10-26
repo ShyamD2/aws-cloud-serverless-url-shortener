@@ -1,4 +1,10 @@
 # AWS Event-Driven Telemetry & Asynchronous Messaging Fabric
+
+[![CI Pipeline](https://github.com/ShyamD2/aws-cloud-serverless-url-shortener/workflows/CI%20Pipeline/badge.svg)](https://github.com/ShyamD2/aws-cloud-serverless-url-shortener/actions)
+[![Security & DevSecOps](https://github.com/ShyamD2/aws-cloud-serverless-url-shortener/workflows/Security%20&%20DevSecOps%20Audit/badge.svg)](https://github.com/ShyamD2/aws-cloud-serverless-url-shortener/actions)
+[![Terraform Plan](https://github.com/ShyamD2/aws-cloud-serverless-url-shortener/workflows/Terraform%20Plan%20&%20Drift%20Detection/badge.svg)](https://github.com/ShyamD2/aws-cloud-serverless-url-shortener/actions)
+
+
 ## Production-Grade Serverless URL Shortener & Analytics Platform
 
 [![CI/CD Pipeline](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-blue.svg)](.github/workflows/ci.yml)
@@ -331,4 +337,3 @@ The full 15-page visual artifact PDF is preserved in the repository at:
 | Dedicated IAM Execution Roles |
 | :---: |
 | ![IAM Roles](docs/screenshots/15-iam-least-privilege-lambda-roles.png) |
-
