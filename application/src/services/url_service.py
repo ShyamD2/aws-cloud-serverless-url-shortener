@@ -3,7 +3,7 @@
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import boto3
@@ -66,16 +66,14 @@ class UrlService:
         Create a new shortened URL entry.
         Guarantees uniqueness via DynamoDB conditional writes.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         now_epoch = int(now.timestamp())
 
         expires_at_epoch = None
         expires_at_iso = None
         if ttl_days is not None and ttl_days > 0:
             expires_at_epoch = now_epoch + (ttl_days * 86400)
-            expires_at_iso = datetime.fromtimestamp(
-                expires_at_epoch, timezone.utc
-            ).isoformat()
+            expires_at_iso = datetime.fromtimestamp(expires_at_epoch, UTC).isoformat()
 
         if custom_alias:
             return self._create_with_alias(

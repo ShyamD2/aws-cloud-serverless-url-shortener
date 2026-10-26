@@ -3,7 +3,7 @@
 import json
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import boto3
@@ -30,7 +30,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         logger.info("No records in SQS event")
         return {"processed_count": 0}
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     partition_prefix = (
         f"clicks/year={now.strftime('%Y')}/month={now.strftime('%m')}/"
         f"day={now.strftime('%d')}/hour={now.strftime('%H')}"

@@ -5,7 +5,7 @@ import logging
 import os
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import boto3
@@ -143,7 +143,7 @@ class AnalyticsService:
             or "Unknown"
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         resolved_req_id = request_id or str(uuid.uuid4())
         resolved_corr_id = correlation_id or resolved_req_id
 
